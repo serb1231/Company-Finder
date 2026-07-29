@@ -143,9 +143,6 @@ if __name__ == "__main__":
     SOURCE_ENHANCE_DATA = 'data/companies.jsonl'
     DEST_ENHANCE_DATA = '.tmp/companies_enhanced.jsonl'
 
-    # initialize your map FIRST!
-    load_country_codes()
-
     # run the synchronizer
     sync_and_modify(SOURCE_ENHANCE_DATA, DEST_ENHANCE_DATA)
 

@@ -12,15 +12,18 @@ def load_json(filepath):
     return {}
 
 
-# map the country code to country if non-existent
-COUNTRY_CODE_MAP: dict[str, str] = {}
+
 
 
 # read CountryCodesRaw and return a dictionary for code and country
 def load_country_codes():
     countries_data = load_json("data/CountryCodesRaw.json")
     # Create the dictionary and convert the code to lowercase
+    # map the country code to country if non-existent
+    COUNTRY_CODE_MAP: dict[str, str] = {}
     COUNTRY_CODE_MAP.update({country["code"].lower(): country["name"] for country in countries_data})
+
+    return COUNTRY_CODE_MAP
 
 
 # Map the region to the country. (Consider moving more specific regions to the top)
@@ -81,6 +84,8 @@ def enhance_address(address_raw):
     if not isinstance(address, dict):
         return address
 
+    COUNTRY_CODE_MAP = load_country_codes()
+
     # fill missing country names using the code
     # .get() returns "" if "country" doesn't exist, preventing KeyErrors
     if address.get("country", "") == "":
@@ -126,8 +131,6 @@ if __name__ == "__main__":
     SOURCE = 'data/companies.jsonl'
     DEST = '.tmp/companies_enhanced.jsonl'
 
-    # initialize your map FIRST!
-    load_country_codes()
 
     # run the synchronizer
     sync_and_modify(SOURCE, DEST)
