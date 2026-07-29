@@ -1,0 +1,33 @@
+{
+  "hard_filters": {
+    "countries": [],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [
+      "Manufacturing"
+    ],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "This company designs and manufactures essential components used in electric vehicle batteries. They supply these parts to major automotive manufacturers and battery producers.",
+  "key_terms": [
+    {
+      "term": "Electric Vehicle Battery Components",
+      "weight": 1.0
+    },
+    {
+      "term": "Automotive Manufacturing",
+      "weight": 0.4
+    }
+  ],
+  "complexity": "hybrid",
+  "reasoning": "The query specifies a product (battery components) and target industry (electric vehicles), requiring semantic understanding beyond simple field filters."
+}

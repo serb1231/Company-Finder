@@ -1,0 +1,35 @@
+{
+  "hard_filters": {
+    "countries": [
+      "Romania"
+    ],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [],
+    "preferred": [
+      "Logistics/Transportation"
+    ]
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "A Romanian logistics company that provides transportation and warehousing services to businesses across various industries.",
+  "key_terms": [
+    {
+      "term": "Logistics",
+      "weight": 1.0
+    },
+    {
+      "term": "Romania",
+      "weight": 0.5
+    }
+  ],
+  "complexity": "structured",
+  "reasoning": "The query specifies a country and industry (logistics), which directly map to data fields."
+}

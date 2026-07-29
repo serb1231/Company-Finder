@@ -1,0 +1,33 @@
+{
+  "hard_filters": {
+    "countries": [],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [],
+    "preferred": [
+      "Manufacturing"
+    ]
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "This company manufactures and supplies packaging materials specifically designed for the cosmetics industry. They cater to direct-to-consumer brands, providing a range of options from boxes and bottles to labels and inserts.",
+  "key_terms": [
+    {
+      "term": "Packaging Materials",
+      "weight": 1.0
+    },
+    {
+      "term": "Cosmetics",
+      "weight": 0.5
+    }
+  ],
+  "complexity": "hybrid",
+  "reasoning": "The query requires identifying companies that supply specific products (packaging materials) within a defined industry (cosmetics), making it a hybrid complexity."
+}

@@ -1,0 +1,24 @@
+{
+  "hard_filters": {
+    "countries": [
+      "United States"
+    ],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": 50000000.0,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "A construction company based in the United States, generating over $50 million in annual revenue. They specialize in building structures and infrastructure projects.",
+  "key_terms": [],
+  "complexity": "structured",
+  "reasoning": "The query specifies clear data field constraints (location, revenue) making it a structured search."
+}

@@ -1,0 +1,33 @@
+{
+  "hard_filters": {
+    "countries": [
+      "Switzerland"
+    ],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "A pharmaceutical company based in Switzerland that develops and manufactures innovative drugs and therapies.",
+  "key_terms": [
+    {
+      "term": "Pharmaceutical",
+      "weight": 1.0
+    },
+    {
+      "term": "Switzerland",
+      "weight": 0.5
+    }
+  ],
+  "complexity": "structured",
+  "reasoning": "The query specifies a country and industry, both of which map directly to data fields."
+}

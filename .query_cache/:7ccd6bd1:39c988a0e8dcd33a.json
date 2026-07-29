@@ -1,0 +1,33 @@
+{
+  "hard_filters": {
+    "countries": [],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [
+      "E-commerce"
+    ],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "This company operates as an online retailer utilizing platforms like Shopify to manage their e-commerce store. They sell a variety of products directly to consumers through their website.",
+  "key_terms": [
+    {
+      "term": "e-commerce",
+      "weight": 1.0
+    },
+    {
+      "term": "Shopify",
+      "weight": 0.5
+    }
+  ],
+  "complexity": "hybrid",
+  "reasoning": "The query specifies a technology (Shopify) used by the target companies, adding a semantic constraint beyond basic field filters."
+}

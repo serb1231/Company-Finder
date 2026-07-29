@@ -1,0 +1,39 @@
+{
+  "hard_filters": {
+    "countries": [
+      "France"
+    ],
+    "regions": [],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [
+      "Manufacturing"
+    ],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "A French company that produces food and beverage products for distribution to retailers, restaurants, or other businesses.",
+  "key_terms": [
+    {
+      "term": "Food",
+      "weight": 1.0
+    },
+    {
+      "term": "Beverage",
+      "weight": 1.0
+    },
+    {
+      "term": "Manufacturer",
+      "weight": 1.0
+    }
+  ],
+  "complexity": "structured",
+  "reasoning": "The query specifies a country and industry, both of which map directly to data fields."
+}

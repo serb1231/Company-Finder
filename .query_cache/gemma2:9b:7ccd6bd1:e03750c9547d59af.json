@@ -1,0 +1,32 @@
+{
+  "hard_filters": {
+    "countries": [],
+    "regions": [
+      "Europe"
+    ],
+    "min_employees": null,
+    "max_employees": null,
+    "min_revenue": null,
+    "max_revenue": null,
+    "founded_after": null,
+    "founded_before": null,
+    "is_public": null
+  },
+  "business_models": {
+    "required": [
+      "Business-to-Business",
+      "Software-as-a-Service"
+    ],
+    "preferred": []
+  },
+  "naics_keywords": [],
+  "ideal_match_description": "A European B2B SaaS company that develops and provides software solutions for managing human resources within organizations. Their products likely streamline HR processes, such as recruitment, payroll, and employee performance management.",
+  "key_terms": [
+    {
+      "term": "HR solutions",
+      "weight": 1.0
+    }
+  ],
+  "complexity": "structured",
+  "reasoning": "The query specifies clear location and business model constraints, allowing for a direct mapping to data fields."
+}
