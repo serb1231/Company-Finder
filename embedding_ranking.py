@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer
 from torch import Tensor
 
 from cache_query import CacheQuery
+from enhance_data_companies import load_country_codes, sync_and_modify
 from hard_filter_database import generate_filtered_subset
 from query_understanding import Complexity, QuerySpec, QueryParser, MODEL
 from read_questions import load_questions
@@ -87,17 +88,18 @@ class CompanyEmbedder:
         embeddings = []
         for doc in docs:
             corpus_hash = hashlib.sha256(
-                (self.model_name + "\n".join(doc)).encode()).hexdigest()[:16]
+                (self.model_name + doc).encode()).hexdigest()[:16]
             # get the file
             cache_file = self.cache_dir / f"company_{corpus_hash}.npy"
             # if it exists, load it, otherwise compute and save
             if cache_file.exists():
-                return np.load(cache_file)
-            emb = self.model.encode(
-                doc, normalize_embeddings=True,
-                batch_size=64, show_progress_bar=True)
-            np.save(cache_file, emb)
-            embeddings.append(emb)
+                embeddings.append(np.load(cache_file))
+            else:
+                emb = self.model.encode(
+                    doc, normalize_embeddings=True,
+                    batch_size=64, show_progress_bar=True)
+                np.save(cache_file, emb)
+                embeddings.append(emb)
         return np.vstack(embeddings)
 
     # compute the embedding for the query description
@@ -137,8 +139,19 @@ if __name__ == "__main__":
     cache = CacheQuery(Path(".query_cache"), MODEL)
     parser = QueryParser(MODEL, cache)
 
+    # Updated to match your path suggestion
+    SOURCE_ENHANCE_DATA = 'data/companies.jsonl'
+    DEST_ENHANCE_DATA = '.tmp/companies_enhanced.jsonl'
+
+    # initialize your map FIRST!
+    load_country_codes()
+
+    # run the synchronizer
+    sync_and_modify(SOURCE_ENHANCE_DATA, DEST_ENHANCE_DATA)
+
     embedder = CompanyEmbedder()
     for i, item in enumerate(load_questions()):
+        i = i + 1
         number, query = item["number"], item["question"]
         spec = parser.parse(query)
         print(f"\n=== {number}. {query}")
@@ -149,19 +162,25 @@ if __name__ == "__main__":
         print(f"Ideal match: {spec.ideal_match_description}")
         print(f"Complexity: {spec.complexity.value}")
 
-        SOURCE_DB = "data/companies_enhanced.jsonl"
+        SOURCE_DB = ".tmp/companies_enhanced.jsonl"
 
-        tmp_output_file = f"data/tmp_query_{i}_filtered.jsonl"
+        tmp_output_file = f".tmp/tmp_query_{i}_filtered.jsonl"
 
-        _, filtered = generate_filtered_subset(source_file=SOURCE_DB,
+        result = generate_filtered_subset(source_file=SOURCE_DB,
                 dest_file=tmp_output_file,
                 query_spec=spec)
+
+        if result is None:
+            print(f"Failed to generate filtered subset for question {number}.")
+            continue
+
+        survivors, filtered = result
         # transform filtered into pd dataframe
         filtered = pd.DataFrame(filtered)
         ranked = rank_companies(filtered, spec, embedder)
 
         # save each ranked in their own file
-        tmp_output_file = f"data/tmp_query_{i}_filtered_semantic_rank.jsonl"
+        tmp_output_file = f".tmp/tmp_query_{i}_filtered_semantic_rank.jsonl"
         with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
             for _, row in ranked.iterrows():
                 outfile.write(row.to_json() + '\n')

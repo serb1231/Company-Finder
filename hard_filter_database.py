@@ -1,7 +1,9 @@
 import json
 import os
+from pathlib import Path
 
 from cache_query import CacheQuery
+from enhance_data_companies import sync_and_modify, load_country_codes
 from query_understanding import QueryParser, MODEL
 from read_questions import load_questions
 # Assuming your Pydantic models (HardFilters, QuerySpec) are imported here
@@ -14,7 +16,7 @@ def score_company(company: dict, filters: HardFilters, business_models: Business
     active_conditions = 0
     met_conditions = 0
 
-    eliminate = False  # Fixed from sympy 'false'
+    eliminate = False
 
     # make a filter list for countries and regions
     filter_geos = set()
@@ -191,10 +193,19 @@ def generate_filtered_subset(
 
 
 if __name__ == "__main__":
-    cache = CacheQuery()
+    cache = CacheQuery(Path(".query_cache"), MODEL)
     parser = QueryParser(model=MODEL, querycache=cache)
 
-    SOURCE_DB = "data/companies_enhanced.jsonl"
+    # Updated to match your path suggestion
+    SOURCE_ENHANCE_DATA = 'data/companies.jsonl'
+    DEST_ENHANCE_DATA = '.tmp/companies_enhanced.jsonl'
+
+    # initialize your map FIRST!
+    load_country_codes()
+
+    # run the synchronizer
+    sync_and_modify(SOURCE_ENHANCE_DATA, DEST_ENHANCE_DATA)
+    SOURCE_DB = ".tmp/companies_enhanced.jsonl"
 
     for item in load_questions():
         number, question = item["number"], item["question"]
@@ -204,12 +215,17 @@ if __name__ == "__main__":
         print(f"\n=== {number}. {question}")
 
         # Define a unique tmp file for this query's results
-        tmp_output_file = f"data/tmp_query_{number}_filtered.jsonl"
+        tmp_output_file = f".tmp/tmp_query_{number}_filtered.jsonl"
 
-        survivors, _ = generate_filtered_subset(
+        result = generate_filtered_subset(
             source_file=SOURCE_DB,
             dest_file=tmp_output_file,
             query_spec=spec
         )
+        if result is None:
+            print(f"Failed to generate filtered subset for question {number}.")
+            continue
+
+        survivors, _ = result
 
         print(f"[{spec.complexity.upper()}] Filtered down to {survivors} candidates. Saved to {tmp_output_file}")

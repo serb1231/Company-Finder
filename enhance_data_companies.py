@@ -124,7 +124,7 @@ def sync_and_modify(source_file, dest_file):
 if __name__ == "__main__":
     # Updated to match your path suggestion
     SOURCE = 'data/companies.jsonl'
-    DEST = 'data/companies_enhanced.jsonl'
+    DEST = '.tmp/companies_enhanced.jsonl'
 
     # initialize your map FIRST!
     load_country_codes()
