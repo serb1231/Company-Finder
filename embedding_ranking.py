@@ -1,6 +1,9 @@
 
 from __future__ import annotations
 
+import re
+
+from rank_bm25 import BM25Okapi
 import hashlib
 from pathlib import Path
 from typing import Any
@@ -117,8 +120,23 @@ class CompanyEmbedder:
         np.save(cache_file, emb)
         return emb
 
+    # compute the embedding for the query description
+    def embed_query_text(self, text: str) -> Tensor | Any:
+        corpus_hash = hashlib.sha256(
+            (self.model_name + text).encode()).hexdigest()[:16]
+        # get the file
+        cache_file = self.cache_dir / f"company_{corpus_hash}.npy"
+        # if it exists, load it, otherwise compute and save
+        if cache_file.exists():
+            return np.load(cache_file)
+        emb = self.model.encode(
+            spec.ideal_match_description, normalize_embeddings=True,
+            batch_size=64, show_progress_bar=True)
+        np.save(cache_file, emb)
+        return emb
 
-def rank_companies(df: pd.DataFrame, spec: QuerySpec,
+
+def rank_companies_semantic(df: pd.DataFrame, spec: QuerySpec,
                    embedder: CompanyEmbedder) -> pd.DataFrame:
 
     out = df.copy()
@@ -132,6 +150,91 @@ def rank_companies(df: pd.DataFrame, spec: QuerySpec,
     out["semantic_score"] = (sim + 1.0) / 2.0
 
     return out.sort_values("semantic_score", ascending=False)
+
+def rank_companies_bm25(df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
+    out = df.copy()
+
+    # BM25 needs lists of words, not strings
+    docs = [company_to_document(row).lower().split() for _, row in out.iterrows()]
+
+    bm25 = BM25Okapi(docs)
+
+    # resulting array
+    total_bm25_scores = np.zeros(len(out))
+
+    for key_term in spec.key_terms:
+        term = key_term.term.lower()
+        weight = key_term.weight
+
+        term_scores = bm25.get_scores([term])
+
+        for idx, row in enumerate(out.itertuples()):
+
+            # bonus if we find it in business model
+            b_models = str(getattr(row, "business_model", "")).lower()
+            if term in b_models:
+                term_scores[idx] *= 2.0
+
+            # smaller bonus if it is in core_offerings
+            offerings = str(getattr(row, "core_offerings", "")).lower()
+            if term in offerings:
+                term_scores[idx] *= 1.5
+
+            # smaller if it is in target_markets
+            markets = str(getattr(row, "target_markets", "")).lower()
+            if term in markets:
+                term_scores[idx] *= 1.5
+
+
+        total_bm25_scores += (term_scores * weight)
+
+    out["bm25_score"] = total_bm25_scores
+
+    return out.sort_values("bm25_score", ascending=False)
+
+
+
+def rank_companies(df, spec, embedder, w_sem=0.7, w_bm25=0.3, k=60):
+    out = df.reset_index(drop=True).copy()
+    docs = [company_to_document(r) for _, r in out.iterrows()]
+
+    # semantic part. Do cosine similarity
+    q_text = ("Represent this sentence for searching relevant passages: "
+              + spec.ideal_match_description)
+    sim = embedder.embed_companies(docs) @ embedder.embed_query_text(q_text)
+    out["semantic_score"] = sim
+
+    # bm25 do word counting
+    bm25 = BM25Okapi([_tokenize(d) for d in docs])
+    q_tokens = _tokenize(spec.ideal_match_description)
+    for t in spec.key_terms:
+        q_tokens += _tokenize(t.term) * max(1, round(t.weight * 3))
+    out["bm25_score"] = bm25.get_scores(q_tokens)
+
+    out["rank_sem"]  = out["semantic_score"].rank(ascending=False, method="min")
+    out["rank_bm25"] = out["bm25_score"].rank(ascending=False, method="min")
+    out["rrf"] = w_sem / (k + out["rank_sem"]) + w_bm25 / (k + out["rank_bm25"])
+    return out.sort_values("rrf", ascending=False)
+
+# words that are not needed for the embeding and the bm25
+STOP = {"the","a","an","and","or","of","to","for","in","on","as","with",
+        "such","its","is","are","that","this","by","from"}
+
+# rules for breaking down sentences, and transforming them in single words
+# but in pairs of words as well
+def _tokenize(text: str, bigrams: bool = True) -> list[str]:
+    toks = [t for t in re.findall(r"[a-z0-9]+", text.lower())
+            if t not in STOP and len(t) > 1]
+    if bigrams:
+        toks += [f"{a}_{b}" for a, b in zip(toks, toks[1:])]
+        toks += [f"{a} {b}" for a, b in zip(toks, toks[1:])]
+        toks += [f"{a}-{b}" for a, b in zip(toks, toks[1:])]
+    return toks
+
+def select_for_judge(ranked, complexity):
+    N = {"structured": 25, "hybrid": 40, "judgment": 60}[complexity.value]
+    pool = ranked[(ranked.rank_sem <= N) | (ranked.rank_bm25 <= N)]
+    return pool.sort_values("rrf", ascending=False)
 
 
 if __name__ == "__main__":
@@ -174,12 +277,30 @@ if __name__ == "__main__":
         survivors, filtered = result
         # transform filtered into pd dataframe
         filtered = pd.DataFrame(filtered)
-        ranked = rank_companies(filtered, spec, embedder)
 
+        ranked = rank_companies(filtered, spec, embedder, w_sem=W_SEMANTIC, w_bm25=W_NAICS, k=60)
         # save each ranked in their own file
-        tmp_output_file = f".tmp/tmp_query_{i}_filtered_semantic_rank.jsonl"
+        tmp_output_file = f".tmp/tmp_query_{i}_filtered_rank.jsonl"
         with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
             for _, row in ranked.iterrows():
                 outfile.write(row.to_json() + '\n')
-        print(ranked[["operational_name", "semantic_score"]].head(10))
+        print(ranked[["operational_name", "semantic_score", "bm25_score", "rrf"]].head(10))
 
+        ranked = rank_companies_semantic(filtered, spec, embedder)
+        #
+        # # save each ranked in their own file
+        # tmp_output_file = f".tmp/tmp_query_{i}_filtered_semantic_rank.jsonl"
+        # with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
+        #     for _, row in ranked.iterrows():
+        #         outfile.write(row.to_json() + '\n')
+        # print(ranked[["operational_name", "semantic_score"]].head(10))
+
+
+        # ranked = rank_companies_bm25(filtered, spec)
+        #
+        # # save each ranked in their own file
+        # tmp_output_file = f".tmp/tmp_query_{i}_filtered_bm25_rank.jsonl"
+        # with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
+        #     for _, row in ranked.iterrows():
+        #         outfile.write(row.to_json() + '\n')
+        # print(ranked[["operational_name", "bm25_score"]].head(10))

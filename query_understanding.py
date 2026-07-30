@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import List
 
 import ollama
 from pydantic import ValidationError
@@ -8,9 +9,9 @@ from pydantic import ValidationError
 from read_questions import load_questions
 from cache_query import CacheQuery
 
-from data_used_by_llm.schemas import QuerySpec, HardFilters, Complexity
+from data_used_by_llm.schemas import QuerySpec, HardFilters, Complexity, KeyTerm, KeyTermList
 
-from data_used_by_llm.prompts import SYSTEM_PROMPT
+from data_used_by_llm.prompts import SYSTEM_PROMPT, SYSTEM_PROMPT_FOR_KEY_WORDS
 
 MODEL = "gemma2:9b"
 
@@ -29,6 +30,11 @@ class QueryParser:
 
         # call the LLM on the query
         spec = self._call_llm(query)
+
+        extracted_terms = self._call_llm_keywords(spec.ideal_match_description)
+
+        spec.key_terms = extracted_terms
+
         self.cache.cache_put(query, spec)
         return spec
 
@@ -63,6 +69,33 @@ class QueryParser:
             complexity=Complexity.judgment,
             reasoning=f"Parser failed ({last_err}); degraded to semantic-only.",
         )
+
+    def _call_llm_keywords(self, big_description: str, retries: int = 2) -> List[KeyTerm]:
+        last_err: Exception | None = None
+        for _ in range(retries + 1):
+            try:
+                # every conversation with a LLM starts this way
+                response = ollama.chat(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT_FOR_KEY_WORDS},
+                        {"role": "user", "content": f"Query: {big_description}"},
+                    ],
+                    # structured outputs: constrain generation to our schema (Json)
+                    format=KeyTermList.model_json_schema(),
+                    # deterministic results for a query
+                    options={"temperature": 0},
+                )
+                parsed_list = KeyTermList.model_validate_json(
+                    response["message"]["content"])
+
+                return parsed_list.keyTerms
+
+            except (ValidationError, KeyError, Exception) as e:
+                last_err = e
+                continue
+
+        return [KeyTerm(term="", weight=0.0)]  # Return a default KeyTerm if all retries fail
 
 
 if __name__ == "__main__":

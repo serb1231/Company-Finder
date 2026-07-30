@@ -83,3 +83,9 @@ FEW_SHOT = [
   "reasoning": "Region and business model are field filters; 'accounting solutions' is a semantic constraint."
 }"""},
 ]
+
+
+
+SYSTEM_PROMPT_FOR_KEY_WORDS = f"""You parse company-search queries into structured JSON specs.
+
+key_terms — 20-30 terms. apply weights depending on the relevance to the company"""

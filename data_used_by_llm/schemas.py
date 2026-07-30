@@ -32,6 +32,8 @@ class HardFilters(BaseModel):
     founded_before: Optional[int] = None
     is_public: Optional[bool] = None
 
+class KeyTermList(BaseModel):
+    keyTerms: list[KeyTerm]
 
 # this will define the relevance for the terms inside
 # the query (more like an attention layer) as some terms
