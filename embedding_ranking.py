@@ -4,23 +4,17 @@ from __future__ import annotations
 import re
 
 from rank_bm25 import BM25Okapi
-import hashlib
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
-from torch import Tensor
 
+from EmbedderQueryAndCompany import Embedder
 from cache_query import CacheQuery
-from enhance_data_companies import load_country_codes, sync_and_modify
+from enhance_data_companies import sync_and_modify
 from hard_filter_database import generate_filtered_subset
-from query_understanding import Complexity, QuerySpec, QueryParser, MODEL
+from query_understanding import QueryParser, MODEL
 from read_questions import load_questions
-
-EMB_MODEL = "BAAI/bge-small-en-v1.5"
-EMB_CACHE_DIR = Path(".emb_cache")
 
 W_SEMANTIC = 0.7
 W_NAICS = 0.3
@@ -75,67 +69,6 @@ def company_to_document(row: pd.Series) -> str:
     return ". ".join(parts) if parts else "(no information available)"
 
 
-
-class CompanyEmbedder:
-    def __init__(self, model_name: str = EMB_MODEL,
-                 cache_dir: Path = EMB_CACHE_DIR):
-        self.model = SentenceTransformer(model_name)
-        self.model_name = model_name
-        self.cache_dir = cache_dir
-        self.cache_dir.mkdir(exist_ok=True)
-        self.global_embeddings = None
-        self.company_indices = []
-
-    # compute the embedding for the description of a company
-    def embed_companies(self, docs: list[str]) -> np.ndarray:
-        embeddings = []
-        for doc in docs:
-            corpus_hash = hashlib.sha256(
-                (self.model_name + doc).encode()).hexdigest()[:16]
-            # get the file
-            cache_file = self.cache_dir / f"company_{corpus_hash}.npy"
-            # if it exists, load it, otherwise compute and save
-            if cache_file.exists():
-                embeddings.append(np.load(cache_file))
-            else:
-                emb = self.model.encode(
-                    doc, normalize_embeddings=True,
-                    batch_size=64, show_progress_bar=True)
-                np.save(cache_file, emb)
-                embeddings.append(emb)
-        return np.vstack(embeddings)
-
-    # compute the embedding for the query description
-    def embed_query(self, spec: QuerySpec) -> Tensor | Any:
-        corpus_hash = hashlib.sha256(
-            (self.model_name + "\n".join(spec.ideal_match_description)).encode()).hexdigest()[:16]
-        # get the file
-        cache_file = self.cache_dir / f"company_{corpus_hash}.npy"
-        # if it exists, load it, otherwise compute and save
-        if cache_file.exists():
-            return np.load(cache_file)
-        emb = self.model.encode(
-            spec.ideal_match_description, normalize_embeddings=True,
-            batch_size=64, show_progress_bar=True)
-        np.save(cache_file, emb)
-        return emb
-
-    # compute the embedding for the query description
-    def embed_query_text(self, text: str) -> Tensor | Any:
-        corpus_hash = hashlib.sha256(
-            (self.model_name + text).encode()).hexdigest()[:16]
-        # get the file
-        cache_file = self.cache_dir / f"company_{corpus_hash}.npy"
-        # if it exists, load it, otherwise compute and save
-        if cache_file.exists():
-            return np.load(cache_file)
-        emb = self.model.encode(
-            spec.ideal_match_description, normalize_embeddings=True,
-            batch_size=64, show_progress_bar=True)
-        np.save(cache_file, emb)
-        return emb
-
-
 def rank_companies(df, spec, embedder, w_sem=0.7, w_bm25=0.3, k=60):
     out = df.reset_index(drop=True).copy()
     docs = [company_to_document(r) for _, r in out.iterrows()]
@@ -157,6 +90,46 @@ def rank_companies(df, spec, embedder, w_sem=0.7, w_bm25=0.3, k=60):
     out["rank_bm25"] = out["bm25_score"].rank(ascending=False, method="min")
     out["rrf"] = w_sem / (k + out["rank_sem"]) + w_bm25 / (k + out["rank_bm25"])
     return out.sort_values("rrf", ascending=False)
+
+
+JUDGMENT_MARKERS = re.compile(
+    r"\bcould\b|\bsimilar\b|compet\w*|fast.growing|\bcritical\b|\bpotential\b")
+
+def select_final(ranked: pd.DataFrame, query: str,
+                 score_col: str = "rrf") -> pd.DataFrame:
+    out = ranked.sort_values(score_col, ascending=False).reset_index(drop=True)
+    s = out[score_col].to_numpy()
+    n = len(s)
+
+    # hard filters already did the work, push everything
+    if n <= 25:
+        return out
+
+    judgment = bool(JUDGMENT_MARKERS.search(query.lower()))
+    min_keep = 15 if judgment else 10
+    max_keep = min(n, max(40 if judgment else 30, int(0.25 * n)))
+
+    # flat curve
+    if s[0] - s[-1] < 0.015:
+        return out.head(max_keep)
+
+    # stop at first real cliff
+    gaps = s[:-1] - s[1:]
+    med = np.median(gaps) + 1e-12
+    cut = None
+    for i in range(min_keep, min(n - 1, max_keep)):
+        if gaps[i] >= 3.0 * med:
+            cut = i + 1
+            break
+    if cut is None:  # smooth decline, no cliff: keep the above-average half
+        z = (s - s.mean()) / (s.std() + 1e-9)
+        cut = int(np.clip((z >= 0).sum(), min_keep, max_keep))
+
+    # 4. never split a near-tie at the boundary
+    while cut < min(n, max_keep) and s[cut - 1] - s[cut] < 0.002:
+        cut += 1
+
+    return out.head(cut)
 
 # words that are not needed for the embeding and the bm25
 STOP = {"the","a","an","and","or","of","to","for","in","on","as","with",
@@ -180,7 +153,6 @@ def select_for_judge(ranked, complexity):
 
 
 if __name__ == "__main__":
-    import sys
     cache = CacheQuery(Path(".query_cache"), MODEL)
     parser = QueryParser(MODEL, cache)
 
@@ -191,18 +163,18 @@ if __name__ == "__main__":
     # run the synchronizer
     sync_and_modify(SOURCE_ENHANCE_DATA, DEST_ENHANCE_DATA)
 
-    embedder = CompanyEmbedder()
+    embedder = Embedder()
     for i, item in enumerate(load_questions()):
         i = i + 1
         number, query = item["number"], item["question"]
         spec = parser.parse(query)
         print(f"\n=== {number}. {query}")
-        print(spec.model_dump_json(indent=2))
+        # print(spec.model_dump_json(indent=2))
 
         spec = parser.parse(query)
         print(f"\nQuery: {query}")
         print(f"Ideal match: {spec.ideal_match_description}")
-        print(f"Complexity: {spec.complexity.value}")
+        # print(f"Complexity: {spec.complexity.value}")
 
         SOURCE_DB = ".tmp/companies_enhanced.jsonl"
 
@@ -227,3 +199,5 @@ if __name__ == "__main__":
             for _, row in ranked.iterrows():
                 outfile.write(row.to_json() + '\n')
         print(ranked[["operational_name", "semantic_score", "bm25_score", "rrf"]].head(10))
+
+        select_final(ranked, query, score_col="rrf").to_csv(f".tmp/tmp_query_{i}_final_selection.csv", index=False)
