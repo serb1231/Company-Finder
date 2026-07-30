@@ -136,64 +136,6 @@ class CompanyEmbedder:
         return emb
 
 
-def rank_companies_semantic(df: pd.DataFrame, spec: QuerySpec,
-                   embedder: CompanyEmbedder) -> pd.DataFrame:
-
-    out = df.copy()
-
-    docs = [company_to_document(row) for _, row in out.iterrows()]
-    company_emb = embedder.embed_companies(docs)
-    query_emb = embedder.embed_query(spec)
-
-    # compute the cosine similarity
-    sim = company_emb @ query_emb
-    out["semantic_score"] = (sim + 1.0) / 2.0
-
-    return out.sort_values("semantic_score", ascending=False)
-
-def rank_companies_bm25(df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
-    out = df.copy()
-
-    # BM25 needs lists of words, not strings
-    docs = [company_to_document(row).lower().split() for _, row in out.iterrows()]
-
-    bm25 = BM25Okapi(docs)
-
-    # resulting array
-    total_bm25_scores = np.zeros(len(out))
-
-    for key_term in spec.key_terms:
-        term = key_term.term.lower()
-        weight = key_term.weight
-
-        term_scores = bm25.get_scores([term])
-
-        for idx, row in enumerate(out.itertuples()):
-
-            # bonus if we find it in business model
-            b_models = str(getattr(row, "business_model", "")).lower()
-            if term in b_models:
-                term_scores[idx] *= 2.0
-
-            # smaller bonus if it is in core_offerings
-            offerings = str(getattr(row, "core_offerings", "")).lower()
-            if term in offerings:
-                term_scores[idx] *= 1.5
-
-            # smaller if it is in target_markets
-            markets = str(getattr(row, "target_markets", "")).lower()
-            if term in markets:
-                term_scores[idx] *= 1.5
-
-
-        total_bm25_scores += (term_scores * weight)
-
-    out["bm25_score"] = total_bm25_scores
-
-    return out.sort_values("bm25_score", ascending=False)
-
-
-
 def rank_companies(df, spec, embedder, w_sem=0.7, w_bm25=0.3, k=60):
     out = df.reset_index(drop=True).copy()
     docs = [company_to_document(r) for _, r in out.iterrows()]
@@ -285,22 +227,3 @@ if __name__ == "__main__":
             for _, row in ranked.iterrows():
                 outfile.write(row.to_json() + '\n')
         print(ranked[["operational_name", "semantic_score", "bm25_score", "rrf"]].head(10))
-
-        ranked = rank_companies_semantic(filtered, spec, embedder)
-        #
-        # # save each ranked in their own file
-        # tmp_output_file = f".tmp/tmp_query_{i}_filtered_semantic_rank.jsonl"
-        # with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
-        #     for _, row in ranked.iterrows():
-        #         outfile.write(row.to_json() + '\n')
-        # print(ranked[["operational_name", "semantic_score"]].head(10))
-
-
-        # ranked = rank_companies_bm25(filtered, spec)
-        #
-        # # save each ranked in their own file
-        # tmp_output_file = f".tmp/tmp_query_{i}_filtered_bm25_rank.jsonl"
-        # with open(tmp_output_file, 'w', encoding='utf-8') as outfile:
-        #     for _, row in ranked.iterrows():
-        #         outfile.write(row.to_json() + '\n')
-        # print(ranked[["operational_name", "bm25_score"]].head(10))
